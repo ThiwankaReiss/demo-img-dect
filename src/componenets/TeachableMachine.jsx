@@ -1,13 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as tmImage from '@teachablemachine/image';
+// import Sorter from './Sorters/Sorter';
+import ARModel from '../canvas/ARModel';
 
 const TeachableMachine = () => {
+
+
+
     const webcamRef = useRef(null);
     const [labelContainer, setLabelContainer] = useState([]);
     const [model, setModel] = useState(null);
     const [maxPredictions, setMaxPredictions] = useState(0);
 
     const URL = './my_model/'; // Path to your model
+
+    const GRID_SIZE = 2; // Define a 10x10 grid
 
     // Load the model and setup the webcam
     const init = async () => {
@@ -33,21 +40,85 @@ const TeachableMachine = () => {
         await predict(webcam);
         window.requestAnimationFrame(() => loop(webcam));
     };
+    
 
-    // Run the webcam image through the image model
+    // Divide canvas into a grid and predict on each section
     const predict = async (webcam) => {
+       
         if (model) {
-            const predictions = await model.predict(webcam.canvas);
-            console.log(predictions)
-            // Map predictions to objects with className and binary detection status
-            const labels = predictions.map((p) => ({
-                className: p.className,
-                detected: p.probability > 0.5, // Detected if probability exceeds threshold
-                probability: parseFloat(p.probability.toFixed(2)),
-            }));
+            const { canvas } = webcam;
+            const sectionWidth = canvas.width / GRID_SIZE;
+            const sectionHeight = canvas.height / GRID_SIZE;
+            const locations = [];
 
-            setLabelContainer(labels);
+            for (let row = 0; row < GRID_SIZE; row++) {
+                for (let col = 0; col < GRID_SIZE; col++) {
+                    const x = col * sectionWidth;
+                    const y = row * sectionHeight;
+
+                    // Create a temporary canvas for each section
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = sectionWidth;
+                    tempCanvas.height = sectionHeight;
+                    const ctx = tempCanvas.getContext('2d');
+                    // ctx.drawImage(canvas, x, y, sectionWidth, sectionHeight, 0, 0, sectionWidth, sectionHeight);
+
+                    // Run prediction on the section
+                    const predictions = await model.predict(tempCanvas);
+                    
+                    predictions.forEach((p) => {
+                        console.log(p.probability)
+                        if (p.probability >=0.9) {
+                            // If detected, calculate the trapezium coordinates
+                            const topLeft = [col, row];
+                            const topRight = [col + 1, row];
+                            const bottomRight = [col + 1, row + 1];
+                            const bottomLeft = [col, row + 1];
+                            locations.push({ className: p.className,
+                                probability:p.probability,
+                                coordinates: [topLeft, topRight, bottomRight, bottomLeft] });
+                        }
+                    });  
+                    if (locations.length > 0) {
+                        console.log('Detected locations:', locations);
+                    }
+                    // if (locations.length > 0) {
+
+
+                    //     var min_x = locations[0].coordinates[0][0]
+                    //     var max_x = locations[0].coordinates[0][0]
+                    //     var min_y = locations[0].coordinates[0][1]
+                    //     var max_y = locations[0].coordinates[0][1]
+
+                    //     locations.forEach((loca) => {
+                    //         loca.coordinates.forEach((cordi) => {
+                    //             if (cordi[0] < min_x) {
+                    //                 min_x = cordi[0]
+                    //             }
+                    //             if (cordi[0] > max_x) {
+                    //                 max_x = cordi[0]
+                    //             }
+                    //             if (cordi[1] < min_y) {
+                    //                 min_y = cordi[1]
+                    //             }
+                    //             if (cordi[1] > max_y) {
+                    //                 max_y = cordi[1]
+                    //             }
+                    //         })
+                    //     })
+                    //     console.log([[min_x, min_y], [max_x, min_y], [min_x, max_y], [max_x, max_y]])
+                        
+                    // }
+
+                }
+            }
+
+         
+           
+            // console.log('Detected locations:', locations);
+            setLabelContainer(locations);
         }
+        
     };
 
     useEffect(() => {
@@ -59,37 +130,35 @@ const TeachableMachine = () => {
     }, []);
 
     return (
-        <div>
-            <h1>Teachable Machine Image Model</h1>
-            <button onClick={init}>Start</button>
-            <div
-                id="webcam-container"
-                style={{
-                    width: '100%',
-                    height: '300px',
-                    position: 'relative',
-                }}
-            >
-                {webcamRef.current && (
-                    <canvas
-                        ref={(el) => (webcamRef.current.canvas = el)}
-                        style={{
-                            height: '100%',
-                            position: 'relative',
-                        }}
-                    />
-                )}
+        <>
+            <div>
+                <h1>Teachable Machine Image Model</h1>
+                <button onClick={init}>Start</button>
+                <div
+                    id="webcam-container"
+                    style={{
+                        width: '100%',
+                        height: '300px',
+                        position: 'relative',
+                    }}
+                >
+                    {webcamRef.current && (
+                        <canvas
+                            ref={(el) => (webcamRef.current.canvas = el)}
+                            style={{
+                                height: '100%',
+                                position: 'relative',
+                            }}
+                        />
+                    )}
+                </div>
+                <div>
+                    <ARModel></ARModel>
+                </div>
             </div>
-            <div id="label-container">
-                {labelContainer.map((label, index) => (
-                    <div key={index}>
-                        {label.className}: {label.detected ? "Detected" : "Not Detected"} ({label.probability})
-                    </div>
-                ))}
-            </div>
-        </div>
+
+        </>
     );
 };
 
 export default TeachableMachine;
-
